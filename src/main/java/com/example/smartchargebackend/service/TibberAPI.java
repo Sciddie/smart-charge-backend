@@ -10,24 +10,25 @@ import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Logger;
+import java.util.stream.Collectors;
 
-import lombok.Getter;
 import org.json.JSONArray;
 import org.json.JSONObject;
-import java.util.stream.Collectors;
 import com.example.smartchargebackend.records.PriceData;
-
+import lombok.Getter;
 
 public class TibberAPI {
 
     private static final String TIBBER_API_URL = "https://api.tibber.com/v1-beta/gql";
-    private static final String TIBBER_API_TOKEN = System.getenv("TIBBER_API_TOKEN");  // Replace with your API token
+    private static final String TIBBER_API_TOKEN = System.getenv("TIBBER_API_TOKEN");  // Use environment variable
+    private static final Logger logger = Logger.getLogger(TibberAPI.class.getName());
 
     @Getter
     private static List<PriceData> priceList = new ArrayList<>();
-    private static final HashMap<String, List<PriceData>> chargingHours = new HashMap<>();
+    private static final ConcurrentHashMap<String, List<PriceData>> chargingHours = new ConcurrentHashMap<>();
 
     static {
         String apiResponse = callAPI();
@@ -51,7 +52,7 @@ public class TibberAPI {
             HttpURLConnection con = (HttpURLConnection) url.openConnection();
             con.setRequestMethod("POST");
             con.setRequestProperty("Content-Type", "application/json");
-            con.setRequestProperty("Authorization", "Bearer " + TIBBER_API_TOKEN);  // Add the Tibber API token for authorization
+            con.setRequestProperty("Authorization", "Bearer " + TIBBER_API_TOKEN);
             con.setDoOutput(true);
 
             // Build the request body
@@ -59,35 +60,31 @@ public class TibberAPI {
             requestBody.put("query", query);
 
             // Send the request
-            OutputStream os = con.getOutputStream();
-            os.write(requestBody.toString().getBytes());
-            os.flush();
-            os.close();
+            try (OutputStream os = con.getOutputStream()) {
+                os.write(requestBody.toString().getBytes());
+                os.flush();
+            }
 
             // Get the response code
             int responseCode = con.getResponseCode();
-            System.out.println("Response Code: " + responseCode);
+            logger.info("Response Code: " + responseCode);
 
             // Read the response
-            if (responseCode == HttpURLConnection.HTTP_OK) {  // Success
-                BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()));
-                String inputLine;
-                StringBuilder response = new StringBuilder();
-
-                while ((inputLine = in.readLine()) != null) {
-                    response.append(inputLine);
+            if (responseCode == HttpURLConnection.HTTP_OK) {
+                try (BufferedReader in = new BufferedReader(new InputStreamReader(con.getInputStream()))) {
+                    StringBuilder response = new StringBuilder();
+                    String inputLine;
+                    while ((inputLine = in.readLine()) != null) {
+                        response.append(inputLine);
+                    }
+                    logger.info("Response: " + response);
+                    return response.toString();
                 }
-                in.close();
-
-                // Print the response
-                System.out.println("Response: " + response);
-                return response.toString();
             } else {
-                System.out.println("POST request failed.");
+                logger.severe("POST request failed with code: " + responseCode);
             }
-
         } catch (Exception e) {
-            e.printStackTrace();
+            logger.severe("API call failed: " + e.getMessage());
         }
         return null;
     }
@@ -96,45 +93,28 @@ public class TibberAPI {
     private static List<PriceData> parseResponse(String jsonResponse) {
         List<PriceData> priceList = new ArrayList<>();
         JSONObject data = new JSONObject(jsonResponse);
+        JSONObject priceInfo = data.optJSONObject("data")
+                .optJSONObject("viewer")
+                .optJSONArray("homes")
+                .optJSONObject(0)
+                .optJSONObject("currentSubscription")
+                .optJSONObject("priceInfo");
 
-        // Parse 'today' prices
-        JSONArray todayPrices = data.getJSONObject("data")
-                .getJSONObject("viewer")
-                .getJSONArray("homes")
-                .getJSONObject(0)
-                .getJSONObject("currentSubscription")
-                .getJSONObject("priceInfo")
-                .getJSONArray("today");
-
-        // Add today's data to priceList
-        parsePrices(todayPrices, priceList);
-
-        // Parse 'tomorrow' prices if available
-        JSONArray tomorrowPrices = data.getJSONObject("data")
-                .getJSONObject("viewer")
-                .getJSONArray("homes")
-                .getJSONObject(0)
-                .getJSONObject("currentSubscription")
-                .getJSONObject("priceInfo")
-                .optJSONArray("tomorrow");
-
-        if (tomorrowPrices != null) {
-            parsePrices(tomorrowPrices, priceList);
-        }
+        parsePrices(priceInfo.optJSONArray("today"), priceList);
+        parsePrices(priceInfo.optJSONArray("tomorrow"), priceList);
 
         return priceList;
     }
 
     // Helper function to parse price array
     private static void parsePrices(JSONArray pricesArray, List<PriceData> priceList) {
-        for (int i = 0; i < pricesArray.length(); i++) {
-            JSONObject priceInfo = pricesArray.getJSONObject(i);
-            double total = priceInfo.getDouble("total");
-
-            // Parse startsAt as OffsetDateTime
-            OffsetDateTime startsAt = OffsetDateTime.parse(priceInfo.getString("startsAt"), DateTimeFormatter.ISO_OFFSET_DATE_TIME);
-
-            priceList.add(new PriceData(total, startsAt));
+        if (pricesArray != null) {
+            for (int i = 0; i < pricesArray.length(); i++) {
+                JSONObject priceInfo = pricesArray.getJSONObject(i);
+                double total = priceInfo.getDouble("total");
+                OffsetDateTime startsAt = OffsetDateTime.parse(priceInfo.getString("startsAt"), DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+                priceList.add(new PriceData(total, startsAt));
+            }
         }
     }
 
@@ -142,41 +122,31 @@ public class TibberAPI {
     public static List<PriceData> getCheapestHours(List<PriceData> prices, int n) {
         // Sort prices by the total value (ascending)
         prices.sort(Comparator.comparingDouble(PriceData::total));
-
-        // Return the n cheapest hours
-        return prices.subList(0, Math.min(n, prices.size())); // Math.min(n, prices.size()) avoids index ouf of range
+        return prices.subList(0, Math.min(n, prices.size()));
     }
 
     // Function to get the n cheapest hours from now on
     public static List<PriceData> getCheapestHoursFromNow(List<PriceData> prices, int n) {
-        // Get the current time and round down to the start of the hour
         OffsetDateTime currentTime = OffsetDateTime.now().truncatedTo(ChronoUnit.HOURS);
-
-        // Filter out prices that start before the current hour
-        List<PriceData> filteredPrices = prices.stream()
-                .filter(price -> !price.startsAt().isBefore(currentTime)) // Only include future or current times
-                .sorted(Comparator.comparingDouble(PriceData::total)) // Sort by price (ascending)
-                .collect(Collectors.toList());
-
-        // Return the n cheapest hours starting from the current hour
-        return filteredPrices.subList(0, Math.min(n, filteredPrices.size()));
+        return prices.stream()
+                .filter(price -> !price.startsAt().isBefore(currentTime))
+                .sorted(Comparator.comparingDouble(PriceData::total))
+                .collect(Collectors.toList())
+                .subList(0, Math.min(n, prices.size()));
     }
 
     // Function to get the cheapest hours within a time frame
     public static List<PriceData> getCheapestHoursWithinTimeFrame(List<PriceData> prices, OffsetDateTime fromTime, int untilHours, int n) {
         OffsetDateTime toTime = fromTime.plusHours(untilHours);
-
-        // Filter the prices within the time frame
-        List<PriceData> filteredPrices = prices.stream()
+        return prices.stream()
                 .filter(price -> !price.startsAt().isBefore(fromTime) && !price.startsAt().isAfter(toTime))
-                .sorted(Comparator.comparingDouble(PriceData::total)) // Sort by price
-                .collect(Collectors.toList());
-
-        return filteredPrices.subList(0, Math.min(n, filteredPrices.size()));
+                .sorted(Comparator.comparingDouble(PriceData::total))
+                .collect(Collectors.toList())
+                .subList(0, Math.min(n, prices.size()));
     }
 
     // Funktion to set charchingHours of an id to the cheapest hours within a time frame
-    public static List<PriceData> scheduleChargingHoursForId(String id,OffsetDateTime fromTime, int untilHours, int n) {
+    public static List<PriceData> scheduleChargingHoursForId(String id, OffsetDateTime fromTime, int untilHours, int n) {
         List<PriceData> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, fromTime, untilHours, n);
         chargingHours.put(id, cheapestHoursWithinTimeFrame);
         return cheapestHoursWithinTimeFrame;
@@ -189,9 +159,7 @@ public class TibberAPI {
         return cheapestHours;
     }
 
-    // Return the charching ours of an id
     public static List<PriceData> getChargingHours(String id) {
         return chargingHours.get(id);
     }
-
 }
