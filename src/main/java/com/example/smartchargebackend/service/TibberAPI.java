@@ -131,8 +131,7 @@ public class TibberAPI {
         return prices.stream()
                 .filter(price -> !price.startsAt().isBefore(currentTime))
                 .sorted(Comparator.comparingDouble(PriceData::total))
-                .collect(Collectors.toList())
-                .subList(0, Math.min(n, prices.size()));
+                .collect(Collectors.collectingAndThen(Collectors.toList(), list -> list.subList(0, Math.min(n, list.size()))));
     }
 
     // Function to get the cheapest hours within a time frame
@@ -141,13 +140,19 @@ public class TibberAPI {
         return prices.stream()
                 .filter(price -> !price.startsAt().isBefore(fromTime) && !price.startsAt().isAfter(toTime))
                 .sorted(Comparator.comparingDouble(PriceData::total))
-                .collect(Collectors.toList())
-                .subList(0, Math.min(n, prices.size()));
+                .collect(Collectors.collectingAndThen(Collectors.toList(), list -> list.subList(0, Math.min(n, list.size()))));
     }
 
     // Funktion to set charchingHours of an id to the cheapest hours within a time frame
     public static List<PriceData> scheduleChargingHoursForId(String id, OffsetDateTime fromTime, int untilHours, int n) {
-        List<PriceData> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, fromTime, untilHours, n);
+        List<PriceData> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, fromTime.truncatedTo(ChronoUnit.HOURS), untilHours, n);
+        chargingHours.put(id, cheapestHoursWithinTimeFrame);
+        return cheapestHoursWithinTimeFrame;
+    }
+
+    // Funktion to set charchingHours of an id to the cheapest hours from now on within a time frame
+    public static List<PriceData> scheduleChargingHoursForId(String id, int untilHours, int n) {
+        List<PriceData> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, OffsetDateTime.now().truncatedTo(ChronoUnit.HOURS), untilHours, n);
         chargingHours.put(id, cheapestHoursWithinTimeFrame);
         return cheapestHoursWithinTimeFrame;
     }

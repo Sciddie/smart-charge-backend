@@ -1,18 +1,27 @@
 package com.example.smartchargebackend.controller;
 
-import com.example.smartchargebackend.records.ChargeTimes;
+import com.example.smartchargebackend.records.PriceData;
+import com.example.smartchargebackend.service.TibberAPI;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import java.time.OffsetDateTime;
-import java.util.ArrayList;
+import java.util.List;
 
 @RestController
 public class ChargeTimesController {
-    @GetMapping("/chargetimes")
-    public ChargeTimes getChargeTimes() {
-        ArrayList<OffsetDateTime> chargetimes = new ArrayList<>();
-        chargetimes.add(OffsetDateTime.parse("2024-09-11T16:00:00.000+02:00"));
-        return new ChargeTimes(chargetimes);
+    @GetMapping("/getchargetimes")
+    public List<PriceData> getChargeTimes(@RequestParam String id) {
+        return TibberAPI.getChargingHours(id);
+    }
+    @GetMapping("/setchargetimestf")
+    public List<PriceData> setChargeTimes(@RequestParam String id, @RequestParam Integer untilHours,
+                                          @RequestParam Integer n) {
+        return TibberAPI.scheduleChargingHoursForId(id, untilHours, n);
+    }
+    @GetMapping("/setchargetimes")
+    public List<PriceData> setChargeTimes(@RequestParam String id,
+                                          @RequestParam Integer hours) {
+        return TibberAPI.scheduleChargingHoursForId(id, hours);
     }
 }
