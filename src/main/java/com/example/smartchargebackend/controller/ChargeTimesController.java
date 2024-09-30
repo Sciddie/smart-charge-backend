@@ -15,9 +15,9 @@ public class ChargeTimesController {
         return TibberAPI.getChargingHours(id);
     }
     @GetMapping("/setchargetimestf")
-    public List<PriceData> setChargeTimes(@RequestParam String id, @RequestParam Integer untilHours,
-                                          @RequestParam Integer n) {
-        return TibberAPI.scheduleChargingHoursForId(id, untilHours, n);
+    public List<PriceData> setChargeTimes(@RequestParam String id, @RequestParam Integer timeframe,
+                                          @RequestParam Integer hours) {
+        return TibberAPI.scheduleChargingHoursForId(id, timeframe, hours);
     }
     @GetMapping("/setchargetimes")
     public List<PriceData> setChargeTimes(@RequestParam String id,
