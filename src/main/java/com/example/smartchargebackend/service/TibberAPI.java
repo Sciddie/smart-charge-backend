@@ -125,10 +125,10 @@ public class TibberAPI {
     }
 
     // Function to get the n cheapest hours
-    public static List<PriceData> getCheapestHours(List<PriceData> prices, int n) {
+    public static List<PriceData> getCheapestHours(int n) {
         // Sort prices by the total value (ascending)
-        prices.sort(Comparator.comparingDouble(PriceData::total));
-        return prices.subList(0, Math.min(n, prices.size()));
+        priceList.sort(Comparator.comparingDouble(PriceData::total));
+        return priceList.subList(0, Math.min(n, priceList.size()));
     }
 
     // Function to get the n cheapest hours from now on
