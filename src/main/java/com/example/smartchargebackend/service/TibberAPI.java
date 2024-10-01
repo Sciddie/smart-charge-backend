@@ -227,4 +227,13 @@ public class TibberAPI {
             logger.severe("Error loading charging hours from file: " + e.getMessage());
         }
     }
+
+    public static List<String> getDevices() {
+        return new ArrayList<>(chargingHours.keySet());
+    }
+
+    public static void removeDevice(String id) {
+        chargingHours.remove(id);
+        saveChargingHoursToFile();
+    }
 }

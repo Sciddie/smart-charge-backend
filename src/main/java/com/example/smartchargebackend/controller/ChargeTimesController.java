@@ -24,4 +24,12 @@ public class ChargeTimesController {
                                           @RequestParam Integer hours) {
         return TibberAPI.scheduleChargingHoursForId(id, hours);
     }
+    @GetMapping("/devices")
+    public List<String> getDevices() {
+        return TibberAPI.getDevices();
+    }
+    @GetMapping("/remove")
+    public void remove(@RequestParam String id) {
+        TibberAPI.removeDevice(id);
+    }
 }
