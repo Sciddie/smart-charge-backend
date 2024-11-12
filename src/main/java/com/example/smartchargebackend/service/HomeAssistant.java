@@ -5,8 +5,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -25,7 +23,7 @@ public class HomeAssistant {
     }
 
     public void setSwitch(String entity, boolean state) {
-
+        callApi("{\"entity_id\": \"" + entity + "\"}", "services/switch/turn_" + (state ? "on" : "off"), "POST");
     }
 
     private void callApi(String query, String path, String requestMethod) {
@@ -43,16 +41,14 @@ public class HomeAssistant {
             }
 
             int responseCode = con.getResponseCode();
-            logger.info("Response Code: {}", responseCode);
 
             if (responseCode == HttpURLConnection.HTTP_OK) {
-
+                logger.info("Response Code: {}", responseCode);
             } else {
-                logger.error("POST request failed with code: {}", responseCode);
+                logger.error("{} request failed with code: {}", requestMethod, responseCode);
             }
         } catch (Exception e) {
             logger.error("API call failed: {}", e.getMessage(), e);
         }
     }
-
 }
