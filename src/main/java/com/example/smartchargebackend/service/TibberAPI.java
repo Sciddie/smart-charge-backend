@@ -36,7 +36,7 @@ public class TibberAPI {
 
     @Getter
     private List<PriceData> priceList = new ArrayList<>();
-    private final ConcurrentHashMap<String, List<PriceData>> chargingHours = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, List<OffsetDateTime>> chargingHours = new ConcurrentHashMap<>();
 
     public TibberAPI(@Value("${tibber.api.url}") String tibberApiUrl,
                      @Value("${tibber.api.token}") String tibberApiToken,
@@ -132,52 +132,54 @@ public class TibberAPI {
     }
 
     // Function to get the n cheapest hours from now on
-    public List<PriceData> getCheapestHoursFromNow(List<PriceData> prices, int n) {
+    public List<OffsetDateTime> getCheapestHoursFromNow(List<PriceData> prices, int n) {
         OffsetDateTime currentTime = OffsetDateTime.now().truncatedTo(ChronoUnit.HOURS);
         return prices.stream()
                 .filter(price -> !price.startsAt().isBefore(currentTime))
                 .sorted(Comparator.comparingDouble(PriceData::total))
+                .map(PriceData::startsAt)
                 .collect(Collectors.collectingAndThen(Collectors.toList(), list -> list.subList(0, Math.min(n, list.size()))));
     }
 
     // Function to get the cheapest hours within a time frame
-    public List<PriceData> getCheapestHoursWithinTimeFrame(List<PriceData> prices, OffsetDateTime fromTime, int untilHours, int n) {
+    public List<OffsetDateTime> getCheapestHoursWithinTimeFrame(List<PriceData> prices, OffsetDateTime fromTime, int untilHours, int n) {
         OffsetDateTime toTime = fromTime.plusHours(untilHours);
         return prices.stream()
                 .filter(price -> !price.startsAt().isBefore(fromTime) && !price.startsAt().isAfter(toTime))
                 .sorted(Comparator.comparingDouble(PriceData::total))
+                .map(PriceData::startsAt)
                 .collect(Collectors.collectingAndThen(Collectors.toList(), list -> list.subList(0, Math.min(n, list.size()))));
     }
 
     // Helper function to save charging hours to file after update
-    private void saveAndReturnChargingHours(String id, List<PriceData> cheapestHours) {
+    private void saveAndReturnChargingHours(String id, List<OffsetDateTime> cheapestHours) {
         chargingHours.put(id, cheapestHours);
         saveChargingHoursToFile(); // Save charging hours to file after updating
     }
 
     // Funktion to set charchingHours of an id to the cheapest hours within a time frame
-    public List<PriceData> scheduleChargingHoursForId(String id, OffsetDateTime fromTime, int untilHours, int n) {
-        List<PriceData> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, fromTime.truncatedTo(ChronoUnit.HOURS), untilHours, n);
+    public List<OffsetDateTime> scheduleChargingHoursForId(String id, OffsetDateTime fromTime, int untilHours, int n) {
+        List<OffsetDateTime> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, fromTime.truncatedTo(ChronoUnit.HOURS), untilHours, n);
         saveAndReturnChargingHours(id, cheapestHoursWithinTimeFrame);
         return cheapestHoursWithinTimeFrame;
     }
 
     // Funktion to set charchingHours of an id to the cheapest hours from now on within a time frame
-    public List<PriceData> scheduleChargingHoursForId(String id, int untilHours, int n) {
-        List<PriceData> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, OffsetDateTime.now().truncatedTo(ChronoUnit.HOURS), untilHours, n);
+    public List<OffsetDateTime> scheduleChargingHoursForId(String id, int untilHours, int n) {
+        List<OffsetDateTime> cheapestHoursWithinTimeFrame = getCheapestHoursWithinTimeFrame(priceList, OffsetDateTime.now().truncatedTo(ChronoUnit.HOURS), untilHours, n);
         saveAndReturnChargingHours(id, cheapestHoursWithinTimeFrame);
         return cheapestHoursWithinTimeFrame;
     }
 
     // Funktion to set charchingHours of an id to the cheapest hours from now on
-    public List<PriceData> scheduleChargingHoursForId(String id, int n) {
-        List<PriceData> cheapestHours = getCheapestHoursFromNow(priceList, n);
+    public List<OffsetDateTime> scheduleChargingHoursForId(String id, int n) {
+        List<OffsetDateTime> cheapestHours = getCheapestHoursFromNow(priceList, n);
         saveAndReturnChargingHours(id, cheapestHours);
         return cheapestHours;
     }
 
     // This method allows you to retrieve charging hours for a specific id
-    public List<PriceData> getChargingHours(String id) {
+    public List<OffsetDateTime> getChargingHours(String id) {
         return chargingHours.get(id);
     }
 
@@ -197,7 +199,7 @@ public class TibberAPI {
             return;
         }
         try {
-            chargingHours.putAll(objectMapper.readValue(file, new TypeReference<ConcurrentHashMap<String, List<PriceData>>>() {}));
+            chargingHours.putAll(objectMapper.readValue(file, new TypeReference<ConcurrentHashMap<String, List<OffsetDateTime>>>() {}));
             logger.info("Charging hours loaded from file.");
         } catch (IOException e) {
             logger.error("Error loading charging hours from file: {}", e.getMessage(), e);

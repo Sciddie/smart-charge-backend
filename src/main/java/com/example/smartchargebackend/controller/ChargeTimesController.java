@@ -25,8 +25,8 @@ public class ChargeTimesController {
 
     @GetMapping
     @Operation(summary = "Get charge times for a device", description = "Retrieve charge times for a given device ID")
-    public List<PriceData> getChargeTimes(@Parameter(description = "Device ID") @RequestParam String id) {
-        List<PriceData> chargeTimes = tibberAPI.getChargingHours(id);
+    public List<OffsetDateTime> getChargeTimes(@Parameter(description = "Device ID") @RequestParam String id) {
+        List<OffsetDateTime> chargeTimes = tibberAPI.getChargingHours(id);
         if (chargeTimes == null || chargeTimes.isEmpty()) {
             throw new ResourceNotFoundException("No charge times found for device with ID: " + id);
         }
@@ -35,7 +35,7 @@ public class ChargeTimesController {
 
     @PostMapping("/schedule")
     @Operation(summary = "Schedule charge times", description = "Schedule charge times for a device with optional parameters")
-    public List<PriceData> scheduleChargeTimes(
+    public List<OffsetDateTime> scheduleChargeTimes(
             @Parameter(description = "Device ID") @RequestParam String id,
             @Parameter(description = "Start time") @RequestParam(required = false) OffsetDateTime from,
             @Parameter(description = "Time frame in hours") @RequestParam(required = false) Integer timeframe,
